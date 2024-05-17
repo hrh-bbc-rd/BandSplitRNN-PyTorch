@@ -15,21 +15,21 @@ class TransformerModule(nn.Module):
     """
 
     def __init__(
-        self,
-        embed_dim: int = 128,
-        dim_ff: int = 512,
-        n_heads: int = 4,
-        dropout: float = 0.0,
-        bidirectional: bool = True,
+            self,
+            embed_dim: int = 128,
+            dim_ff: int = 512,
+            n_heads: int = 4,
+            dropout: float = 0.0,
+            bidirectional: bool = True,
     ):
         super(TransformerModule, self).__init__()
 
         self.groupnorm = nn.GroupNorm(embed_dim, embed_dim)
         self.mha = MultiheadAttention(embed_dim, n_heads, dropout=dropout)
-        self.recurrent = nn.LSTM(
-            embed_dim, dim_ff, bidirectional=bidirectional, batch_first=True
-        )
-        self.linear = nn.Linear(2 * dim_ff if bidirectional else dim_ff, embed_dim)
+        self.recurrent = nn.LSTM(embed_dim, dim_ff, bidirectional=bidirectional, batch_first=True)
+        self.linear = nn.Linear(
+            2 * dim_ff if bidirectional else dim_ff,
+            embed_dim)
 
     def forward(self, x: torch.Tensor):
         """
@@ -43,9 +43,9 @@ class TransformerModule(nn.Module):
         x = x.view(B * K, T, N)  # [BK, T, N] across T,      [BT, K, N] across K
 
         # groupnorm
-        out = self.groupnorm(x.transpose(-1, -2)).transpose(
-            -1, -2
-        )  # [BK, T, N]    [BT, K, N]
+        out = self.groupnorm(
+            x.transpose(-1, -2)
+        ).transpose(-1, -2)  # [BK, T, N]    [BT, K, N]
 
         # Attention
         mha_in = x.transpose(0, 1)
@@ -70,18 +70,22 @@ class BandTransformerModelModule(nn.Module):
     """
 
     def __init__(
-        self,
-        input_dim_size: int,
-        hidden_dim_size: int,
-        num_layers: int = 6,
+            self,
+            input_dim_size: int,
+            hidden_dim_size: int,
+            num_layers: int = 6,
     ):
         super(BandTransformerModelModule, self).__init__()
 
         self.dptransformers = nn.ModuleList([])
 
         for _ in range(num_layers):
-            transformer_across_t = TransformerModule(input_dim_size, hidden_dim_size)
-            transformer_across_k = TransformerModule(input_dim_size, hidden_dim_size)
+            transformer_across_t = TransformerModule(
+                input_dim_size, hidden_dim_size
+            )
+            transformer_across_k = TransformerModule(
+                input_dim_size, hidden_dim_size
+            )
             self.dptransformers.append(
                 nn.Sequential(transformer_across_t, transformer_across_k)
             )
@@ -96,13 +100,17 @@ class BandTransformerModelModule(nn.Module):
         return x
 
 
-if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     batch_size, k_subbands, t_timesteps, input_dim = 4, 41, 259, 128
     in_features = torch.rand(batch_size, k_subbands, t_timesteps, input_dim).to(device)
 
-    cfg = {"input_dim_size": 128, "hidden_dim_size": 256, "num_layers": 12}
+    cfg = {
+        "input_dim_size": 128,
+        "hidden_dim_size": 256,
+        "num_layers": 12
+    }
     model = BandTransformerModelModule(**cfg).to(device)
     _ = model.eval()
 

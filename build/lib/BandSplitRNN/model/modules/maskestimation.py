@@ -3,14 +3,13 @@ import typing as tp
 import torch
 import torch.nn as nn
 
-from .utils import freq2bands
+from model.modules.utils import freq2bands
 
 
 class GLU(nn.Module):
     """
     GLU Activation Module.
     """
-
     def __init__(self, input_dim: int):
         super(GLU, self).__init__()
         self.input_dim = input_dim
@@ -19,7 +18,7 @@ class GLU(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = self.linear(x)
-        x = x[..., : self.input_dim] * self.sigmoid(x[..., self.input_dim :])
+        x = x[..., :self.input_dim] * self.sigmoid(x[..., self.input_dim:])
         return x
 
 
@@ -27,13 +26,12 @@ class MLP(nn.Module):
     """
     Just a simple MLP with tanh activation (by default).
     """
-
     def __init__(
-        self,
-        input_dim: int,
-        hidden_dim: int,
-        output_dim: int,
-        activation_type: str = "tanh",
+            self,
+            input_dim: int,
+            hidden_dim: int,
+            output_dim: int,
+            activation_type: str = 'tanh',
     ):
         super(MLP, self).__init__()
 
@@ -41,16 +39,16 @@ class MLP(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             self.select_activation(activation_type)(),
             nn.Linear(hidden_dim, output_dim),
-            GLU(output_dim),
+            GLU(output_dim)
         )
 
     @staticmethod
     def select_activation(activation_type: str) -> nn.modules.activation:
-        if activation_type == "tanh":
+        if activation_type == 'tanh':
             return nn.Tanh
-        elif activation_type == "relu":
+        elif activation_type == 'relu':
             return nn.ReLU
-        elif activation_type == "gelu":
+        elif activation_type == 'gelu':
             return nn.GELU
         else:
             raise ValueError("wrong activation function was selected")
@@ -67,15 +65,15 @@ class MaskEstimationModule(nn.Module):
     """
 
     def __init__(
-        self,
-        sr: int,
-        n_fft: int,
-        bandsplits: tp.List[tp.Tuple[int, int]],
-        t_timesteps: int = 517,
-        fc_dim: int = 128,
-        mlp_dim: int = 512,
-        complex_as_channel: bool = True,
-        is_mono: bool = False,
+            self,
+            sr: int,
+            n_fft: int,
+            bandsplits: tp.List[tp.Tuple[int, int]],
+            t_timesteps: int = 517,
+            fc_dim: int = 128,
+            mlp_dim: int = 512,
+            complex_as_channel: bool = True,
+            is_mono: bool = False,
     ):
         super(MaskEstimationModule, self).__init__()
 
@@ -90,15 +88,14 @@ class MaskEstimationModule(nn.Module):
         self.frequency_mul = frequency_mul
 
         self.bandwidths = [(e - s) for s, e in freq2bands(bandsplits, sr, n_fft)]
-        self.layernorms = nn.ModuleList(
-            [nn.LayerNorm([t_timesteps, fc_dim]) for _ in range(len(self.bandwidths))]
-        )
-        self.mlp = nn.ModuleList(
-            [
-                MLP(fc_dim, mlp_dim, bw * frequency_mul, activation_type="tanh")
-                for bw in self.bandwidths
-            ]
-        )
+        self.layernorms = nn.ModuleList([
+            nn.LayerNorm([t_timesteps, fc_dim])
+            for _ in range(len(self.bandwidths))
+        ])
+        self.mlp = nn.ModuleList([
+            MLP(fc_dim, mlp_dim, bw * frequency_mul, activation_type='tanh')
+            for bw in self.bandwidths
+        ])
 
     def forward(self, x: torch.Tensor):
         """
@@ -114,12 +111,10 @@ class MaskEstimationModule(nn.Module):
             # return to complex
             if self.cac:
                 out = out.permute(0, 2, 1).contiguous()
-                out = out.view(B, -1, 2, F // self.frequency_mul, T).permute(
-                    0, 1, 3, 4, 2
-                )
+                out = out.view(B, -1, 2, F//self.frequency_mul, T).permute(0, 1, 3, 4, 2)
                 out = torch.view_as_complex(out.contiguous())
             else:
-                out = out.view(B, -1, F // self.frequency_mul, T).contiguous()
+                out = out.view(B, -1, F//self.frequency_mul, T).contiguous()
             outs.append(out)
 
         # concat all subbands
@@ -127,7 +122,7 @@ class MaskEstimationModule(nn.Module):
         return outs
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     batch_size, k_subbands, t_timesteps, input_dim = 8, 41, 259, 128
     in_features = torch.rand(batch_size, k_subbands, t_timesteps, input_dim)
 
@@ -147,13 +142,13 @@ if __name__ == "__main__":
         "complex_as_channel": False,
         "is_mono": False,
     }
-    model = MaskEstimationModule(**cfg)
+    model = MaskEstimationModule(
+        **cfg
+    )
     _ = model.eval()
 
     with torch.no_grad():
         out_features = model(in_features)
 
     print(f"Total number of parameters: {sum([p.numel() for p in model.parameters()])}")
-    print(
-        f"In: {in_features.shape}\nOut: {out_features.shape}, Out dtype: {out_features.dtype}"
-    )
+    print(f"In: {in_features.shape}\nOut: {out_features.shape}, Out dtype: {out_features.dtype}")
